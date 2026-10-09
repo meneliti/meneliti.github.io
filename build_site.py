@@ -136,9 +136,13 @@ FOOTER = """
 <footer class="border-t border-cyan-500/10 py-10 text-center mt-16">
   <p class="text-gray-500 text-sm font-mono">© {year} <a href="https://github.com/meneliti" class="text-cyan-400 hover:underline" target="_blank" rel="noopener">meneliti</a> · PT. Pastiin Siber Indonesia</p>
   <p class="text-gray-600 text-xs mt-2 font-mono">GitHub Pages · Tailwind CSS · Python · <a href="/" class="text-cyan-500 hover:underline">beranda</a></p>
-  <p class="mt-3"><img src="https://s01.flagcounter.com/countxl/qaoY/bg_FFFFFF/txt_000000/border_CCCCCC/columns_2/maxflags_10/viewers_0/labels_0/pageviews_1/flags_0/percent_0/" alt="pengunjung" class="inline-block rounded"></p>
+  {counter_html}
 </footer>
 """
+
+COUNTER_HTML = ('<p class="mt-3"><img src="https://s01.flagcounter.com/countxl/qaoY/bg_FFFFFF/txt_000000/'
+                'border_CCCCCC/columns_2/maxflags_10/viewers_0/labels_0/pageviews_1/flags_0/percent_0/" '
+                'alt="pengunjung" class="inline-block rounded"></p>')
 
 NAV_ITEMS = [("Beranda", "/", "index.html"), ("Emas", "/harga-emas/", "harga-emas/index.html"),
              ("Sembako", "/harga-sembako/", "harga-sembako/index.html"),
@@ -190,7 +194,7 @@ def page_shell(title, desc, active, body, extra_head=""):
   </div>
 </nav>
 {body}
-{FOOTER.format(year=now.year)}
+{FOOTER.format(year=now.year, counter_html=COUNTER_HTML if active == "index.html" else "")}
 <script>
 // jam WIB live
 (function tick(){{
