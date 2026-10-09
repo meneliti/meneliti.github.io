@@ -1,0 +1,280 @@
+#!/usr/bin/env python3
+"""Generate index.html untuk meneliti.github.io
+- Data repo diambil live dari GitHub API saat build (fallback statis).
+- Deskripsi 500 kata per repo (statis, SEO-friendly).
+- Tailwind via CDN, tema cyber, responsif.
+"""
+import json
+import subprocess
+import urllib.request
+from datetime import datetime, timezone, timedelta
+
+WIB = timezone(timedelta(hours=7))
+BULAN = ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli",
+         "Agustus", "September", "Oktober", "November", "Desember"]
+
+FALLBACK = [
+    {"name": "Harga-Emas-Terbaru-Hari-Ini", "language": "Python",
+     "updated": "2026-10-09T01:13:05Z",
+     "desc": "Dapatkan akses API harga emas terkini dari berbagai penyedia terkemuka di Indonesia."},
+    {"name": "Harga-Sembako-Terbaru", "language": "Python",
+     "updated": "2026-10-09T02:28:41Z",
+     "desc": "Data harga sembako terbaru di seluruh Indonesia yang terus diperbarui setiap hari."},
+    {"name": "Trending-di-Indonesia", "language": "Python",
+     "updated": "2026-10-09T02:29:07Z",
+     "desc": "Data trending topik terkini di seluruh Indonesia, diperbarui real-time."},
+    {"name": "Ping-Hash", "language": "Python",
+     "updated": "2026-10-08T05:23:26Z",
+     "desc": "Ping hash private, cek apakah server masih aktif atau down."},
+]
+
+# Deskripsi panjang ~500 kata per repo (SEO copy)
+LONG = {
+"Harga-Sembako-Terbaru": """
+Harga Sembako Terbaru adalah repositori data yang menyajikan informasi harga barang kebutuhan pokok (sembako) paling aktual untuk seluruh wilayah Indonesia. Data yang tersedia mencakup 26 komoditas utama seperti beras, jagung, kedelai, telur ayam, daging ayam, daging sapi, minyak goreng, gula pasir, cabai merah, bawang merah, bawang putih, dan berbagai sayuran serta buah-buahan penting lainnya yang menjadi kebutuhan harian masyarakat. Seluruh harga diambil dari tingkat provinsi di 38 provinsi Indonesia, kemudian diolah menjadi harga rata-rata nasional, harga terendah, dan harga tertinggi antar wilayah sehingga pembaca dapat langsung melihat gambaran lengkap pergerakan pasar dalam satu tabel yang rapi dan mudah dipahami.
+Data pada repositori ini diperbarui secara otomatis setiap enam jam oleh sebuah skrip Python ringan yang berjalan tanpa henti di server. Skrip tersebut menarik data dari sistem pemantauan pasar kebutuhan pokok resmi pemerintah, mengagregasinya per komoditas, menghitung persentase perubahan dibandingkan hari sebelumnya, lalu memperbarui tabel dokumentasi di repositori ini secara langsung. Karena prosesnya sepenuhnya otomatis, pengguna selalu mendapatkan data terbaru tanpa perlu menyegarkan atau mencari sumber lain. Setiap perubahan harga ditandai dengan indikator panah naik, turun, atau stabil sehingga tren harian langsung terbaca.
+Sumber data diolah dari portal pemantauan harga pemerintah yang datanya dikumpulkan dari pasar-pasar tradisional, pasar induk, dan ritel modern di berbagai daerah. Dengan cakupan seluas itu, angka yang ditampilkan merepresentasikan kondisi pasar riil, bukan sekadar harga acuan teoretis. Komoditas dikelompokkan ke dalam kategori bahan pokok, daging dan telur, sayur dan buah, serta kebutuhan lainnya agar pencarian informasi lebih cepat dan terstruktur.
+Repositori ini sangat bermanfaat bagi berbagai kalangan. Ibu rumah tangga dapat memanfaatkannya untuk merencanakan belanja bulanan dengan lebih ekonomis. Pedagang dan pemilik usaha kuliner dapat memantau biaya bahan baku untuk menentukan harga jual yang tepat. Analis ekonomi, peneliti, jurnalis, dan mahasiswa dapat menggunakan data historis pada riwayat commit sebagai bahan kajian inflasi harian, ketahanan pangan, atau perbandingan antarwilayah. Developer juga bebas mengambil data ini untuk diintegrasikan ke aplikasi pembelian, dashboard harga, atau chatbot informasi pasar.
+Seluruh kode yang digunakan untuk mengambil dan mengolah data tersedia terbuka di repositori ini. Skripnya ditulis dengan Python murni tanpa dependensi eksternal sehingga sangat mudah dijalankan ulang di lingkungan mana pun, cukup dengan perintah satu baris. Dokumentasi menjelaskan struktur data, cara menjalankan ulang scraper, dan konfigurasi interval pembaruan. Dengan kombinasi data yang selalu segar, sumber resmi, lisensi terbuka, dan pembaruan otomatis dua kali sehari, Harga Sembako Terbaru menjadi rujukan praktis dan tepercaya untuk memantau harga kebutuhan pokok Indonesia kapan saja.
+Dari sisi teknis, arsitektur proyek ini sengaja dibuat sesederhana mungkin agar mudah diaudit dan dipelajari. Tidak ada database, tidak ada antrean pesan, tidak ada layanan mikro; hanya satu berkas skrip, satu berkas dokumentasi yang terus diperbarui, dan riwayat git yang menjadi basis data historisnya. Setiap kali scraper selesai berjalan, hasil pembaruan di-commit dengan pesan yang memuat tanggal dan waktu eksekusi, lalu didorong otomatis ke cabang utama. Pola semacam ini membuat siapa pun bisa menelusuri kapan harga berubah dan seberapa besar pergeserannya cukup dengan membaca riwayat commit, tanpa perlu membangun infrastruktur tambahan apa pun.
+""",
+
+"Harga-Emas-Terbaru-Hari-Ini": """
+Harga Emas Terbaru Hari Ini adalah repositori yang menyediakan perbandingan harga emas batangan per gram dari delapan belas penyedia emas resmi di Indonesia, diurutkan secara otomatis dari yang termurah hingga yang termahal. Penyedia yang dipantau meliputi Antam melalui Aneka Logam dan Logam Mulia, Pegadaian, Bank BSI, Indogold, Treasury, Lakuemas, Sakumas, Galeri 24, Sampoerna Gold, Hartadinata Abadi, EmasKu, Brankas LM, dan beberapa agregator harga terkemuka lainnya. Bagi siapa pun yang ingin membeli emas batangan maupun investasi logam mulia, tabel perbandingan ini membantu menemukan selisih harga antar penjual yang kadang mencapai puluhan ribu rupiah per gram.
+Setiap entri data memuat empat informasi inti: nama penyedia, jenis produk emas, harga jual per gram, serta harga buyback atau harga jual kembali ke penyedia. Dari dua angka terakhir dihitung selisih atau spread jual beli, indikator penting bagi investor karena makin kecil spread berarti makin sedikit nilai yang hilang saat emas dijual kembali. Ringkasan di bagian atas tabel menampilkan harga termurah, harga termahal, dan harga rata-rata seluruh penyedia sehingga posisi setiap penjual langsung terlihat.
+Data diperbarui otomatis setiap enam jam oleh skrip Python tanpa dependensi eksternal yang berjalan di server. Skrip menarik data dari API agregator harga logam mulia, menyaring hanya gramasi satu gram agar perbandingan apple-to-apple, membuang entri yang bukan emas batangan fisik seperti emas digital atau konversi kurs, lalu menata ulang tabel dokumentasi. Semua perubahan tercatat pada riwayat commit, sehingga tersedia jejak historis pergerakan harga yang bisa ditelusuri kapan saja untuk kebutuhan analisis tren jangka pendek maupun panjang.
+Repositori ini dirancang bagi berbagai audiens. Investor pemula dapat menggunakannya untuk menemukan tempat beli emas dengan harga terbaik sekaligus memahami konsep buyback sebelum bertransaksi. Investor berpengalaman dapat memantau spread antar penyedia sebagai bagian dari strategi akumulasi. Peneliti dan pembuat konten keuangan dapat mengutip angka dengan percaya diri karena sumber datanya jelas dan dapat diverifikasi. Developer dapat membangun aplikasi pemantauan investasi dengan mengambil struktur data yang sama.
+Dokumentasi di repositori menjelaskan makna setiap kolom, cara kerja scraper, perintah untuk menjalankan ulang secara manual, serta keterbatasan data seperti kemungkinan harga berbeda dengan harga toko fisik pada saat tertentu. Dengan pembaruan otomatis empat kali sehari, cakupan delapan belas penyedia, penyajian yang transparan, dan kode terbuka yang siap pakai, Harga Emas Terbaru Hari Ini menjadi alat bantu praktis untuk keputusan jual beli emas yang lebih cerdas dan terinformasi.
+Perlu dicatat bahwa harga emas batangan memang wajar berbeda antar penyedia karena beberapa faktor: premi produksi yang bervariasi antar merek, biaya distribusi, kebijakan spread masing-masing perusahaan, hingga lokasi geografis toko fisiknya. Repositori ini justru mengubah perbedaan itu menjadi keunggulan — dengan menyajikannya berdampingan dalam satu tabel, pembaca dapat menghitung sendiri berapa nilai yang bisa dihemat bila membeli di penyedia yang tepat, sekaligus memperkirakan potensi kerugian buyback di kemudian hari. Untuk pengembang yang ingin memanfaatkan datanya lebih jauh, struktur tabel yang konsisten membuat proses parsing menjadi trivial; cukup baca berkas dokumentasi, ambil angkanya, dan bangun notifikasi harga, grafik tren, atau perbandingan historis sesuai kebutuhan aplikasimu.
+""",
+
+"Trending-di-Indonesia": """
+Trending di Indonesia adalah repositori yang menyajikan dua puluh lima kata kunci paling banyak dicari di Google Trends Indonesia dalam dua puluh empat jam terakhir, diperbarui otomatis setiap dua jam. Berbeda dengan sekadar daftar tren statis, repositori ini mengolah data menjadi informasi yang kaya konteks: setiap tren dilengkapi estimasi volume penelusuran, persentase lonjakan dibanding periode sebelumnya, berapa lama tren tersebut mulai naik daun, hingga kueri terkait yang biasanya diketik orang bersamaan dengan kata kunci utama.
+Data diambil langsung dari halaman trending Google untuk wilayah Indonesia oleh skrip Python murni tanpa dependensi pihak ketiga. Skrip mem-parsing struktur halaman, mengekstrak seluruh metrik, lalu menyusun ulang tabel dokumentasi di repositori ini secara otomatis. Tiga tren terpanas ditampilkan di bagian podium dengan medali emas, perak, dan perunggu, lengkap dengan total gabungan volume penelusuran seluruh daftar. Karena diperbarui dua belas kali sehari, pengguna dapat memantau bagaimana sebuah topik naik, memuncak, lalu menghilang dari radar publik hampir secara waktu nyata.
+Manfaat repositori ini sangat luas. Konten kreator dan media sosial dapat menemukan ide konten yang sedang hangat dibicarakan publik jauh sebelum menjadi jenuh. Praktisi digital marketing dapat menyelaraskan kampanye iklan atau artikel SEO dengan topik yang sedang dicari banyak orang, memaksimalkan peluang muncul di hasil pencarian. Jurnalis dan redaksi daring dapat memanfaatkannya sebagai radar berita cepat untuk melihat isu yang mendadak menjadi perhatian nasional. Peneliti perilaku digital dapat menelusuri riwayat commit sebagai data longitudinal minat publik Indonesia. Bahkan pengguna biasa pun dapat membuka repositori ini setiap pagi untuk tahu apa yang sedang ramai diperbincangkan bangsanya hari ini.
+Kejujuran data menjadi perhatian utama. Volume penelusuran ditampilkan apa adanya sesuai estimasi Google, lengkap dengan satuan ribuan, dan persentase kenaikan mencerminkan perhitungan resmi platform. Tidak ada penyuntingan manual, tidak ada kurasi algoritma tersembunyi; apa yang sedang dicari orang Indonesia itulah yang tampil. Riwayat commit menyimpan snapshot tiap dua jam sehingga tren yang cepat pudar sekalipun tetap terdokumentasi.
+Dokumentasi repositori menjelaskan definisi setiap kolom, cara menjalankan ulang scraper dengan satu perintah, serta opsi kustomisasi seperti membatasi periode realtime atau memfilter kategori tertentu. Dengan frekuensi pembaruan tertinggi di antara repositori lain dari akun ini, cakupan metrik yang lengkap, dan kode yang benar-benar terbuka, Trending di Indonesia adalah jendela cepat dan andal untuk membaca denyut minat publik Indonesia setiap hari.
+Sebagai catatan metodologi, tren yang tampil adalah agregasi Google untuk wilayah Indonesia secara keseluruhan, bukan hasil sampling dari satu platform media sosial tertentu, sehingga representatif terhadap aktivitas pencarian nasional secara umum. Ada siklus yang jelas dalam data ini: topik olahraga mendominasi pada malam pertandingan, isu kebijakan pemerintah melonjak saat ada pengumuman resmi, dan topik hiburan selalu siap muncul kapan pun publikasi barunya dirilis. Dengan memantau pola tersebut selama beberapa pekan, pembaca yang rajin akan mulai mengenali ritme perhatian publik Indonesia dan bisa memprediksi jenis konten atau produk apa yang berpeluang mendapat sorotan berikutnya. Semua kemampuan analitis itu bisa dimulai dari satu tabel sederhana yang diperbarui otomatis dua belas kali sehari di repositori ini.
+""",
+
+"Ping-Hash": """
+Ping Hash adalah repositori uptime monitor berbasis git yang membuktikan bahwa sebuah server masih hidup dengan cara yang sederhana namun sulit dipalsukan: setiap probe yang berhasil menghasilkan satu commit dengan sidik jari kriptografis SHA-256. Setiap satu sampai delapan menit, daemon kecil yang berjalan di server melakukan pemeriksaan, menghash timestamp pemeriksaan tersebut, menulis hasilnya ke dalam berkas log harian, lalu melakukan commit dan push otomatis ke cabang utama repositori ini. Sebagai pengguna, kamu cukup melihat grafik kontribusi atau riwayat commit untuk mengetahui kapan terakhir kali server terbukti aktif.
+Konsep di balik Ping Hash lahir dari kebutuhan pemantauan yang gratis, transparan, dan tahan manipulasi. Solusi monitoring komersial memang lengkap, tetapi mahal dan terpusat pada pihak ketiga. Ping Hash membalik pendekatannya: bukti uptime disimpan pada git itu sendiri, tersebar di infrastruktur GitHub, dan dapat diverifikasi siapa pun. Setiap baris log memuat timestamp UTC, dua belas digit pertama hash SHA-256, label probe acak dengan indikator emoji, status up atau warn, serta round-trip time dalam milidetik. Siapa pun dapat memverifikasi keaslian sebuah entri dengan menghash ulang timestamp yang tertera; jika hasilnya cocok, entri itu asli dan belum pernah diubah.
+Interval pemeriksaan sengaja dibuat acak antara satu hingga delapan menit alih-alih pola cron tetap, menirukan ritme aktivitas yang lebih organik. Status warn muncul ketika latency melebihi ambang tertentu, memberi sinyal awal bahwa performa menurun meski layanan belum down. Skrip pemeriksa ditulis dengan Python stdlib murni, tanpa satu pun paket pihak ketiga, sehingga dapat hidup di VM paling sederhana sekalipun. Daemon penjadwalnya hanya berupa shell loop dengan delay acak yang dapat disesuaikan.
+Repositori ini berguna untuk beberapa skenario. Pemilik server pribadi dapat memakainya sebagai bukti uptime publik yang bisa ditautkan ke halaman status. Tim kecil dapat menjadikannya alternatif ringan heartbeat monitoring tanpa menambah langganan. Penggemar otomasi dapat mempelajari pola commit otomatis yang aman, lengkap dengan penanganan duplikat dan pembatasan ukuran berkas log harian. Karena setiap probe menghasilkan kontribusi di grafik GitHub, repositori ini juga hidup secara visual: hari-hari aktif tampil hijau, hari down membiarkan kotaknya kosong, jadi kesehatan server terbaca dari jauh.
+Dokumentasi di dalamnya memuat diagram alur probe hingga push, legenda emoji status, tabel struktur log, panduan menjalankan daemon sendiri, serta roadmap pengembangan seperti notifikasi Telegram dan grafik uptime berbasis HTML. Dengan pendekatan minimalis, verifikasi kriptografis, dan jejak publik yang tidak bisa diubah, Ping Hash menawarkan cara paling jujur untuk menjawab satu pertanyaan klasik: apakah server ini masih hidup?
+Nilai praktis terbesar dari pendekatan ini justru pada ketiadaan titik kegagalan tunggal. Monitoring tradisional mati bersama servernya bila keduanya berada di tempat yang sama; Ping Hash menghindari jebakan itu karena pemeriksa berjalan di server yang dipantau namun buktinya disimpan di luar, di infrastruktur GitHub yang hampir mustahil turun bersamaan. Bila server benar-benar mati, yang terjadi bukan halaman error yang juga ikut tidak bisa diakses, melainkan keheningan pada grafik kontribusi — pola kosong yang justru menjadi alarm paling jujur. Selain itu, karena seluruh riwayat tersimpan sebagai git history biasa, data uptime bertahun-tahun hanya butuh puluhan kilobyte penyimpanan dan dapat di-mount ulang di infrastruktur mana pun tanpa migrasi. Ping Hash membuktikan bahwa kadang solusi monitoring terbaik bukanlah yang paling canggih, melainkan yang paling tidak mungkin berbohong.
+""",
+}
+
+
+def fetch_repos():
+    try:
+        req = urllib.request.Request(
+            "https://api.github.com/users/meneliti/repos?per_page=100&sort=updated",
+            headers={"User-Agent": "meneliti-site"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            repos = json.load(r)
+        return [x for x in repos if x["name"] != "meneliti.github.io"]
+    except Exception as e:
+        print("API gagal, pakai fallback:", e)
+        return FALLBACK
+
+
+def fmt_date(iso):
+    d = datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(WIB)
+    return f"{d.day} {BULAN[d.month]} {d.year}"
+
+
+def build_cards(repos):
+    cards = []
+    for r in repos:
+        name = r["name"]
+        slug = name.lower()
+        words = len(LONG.get(name, "").split())
+        paras = [p.strip() for p in LONG.get(name, "").strip().split("\n\n") if p.strip()]
+        paras_html = "\n".join(f"<p>{p}</p>" for p in paras)
+        upd = r.get("updated") or r.get("updated_at") or ""
+        cards.append(f"""
+      <article id="{slug}" class="repo-card group relative bg-gray-900/60 border border-cyan-500/20 rounded-2xl p-6 md:p-8 backdrop-blur transition hover:border-cyan-400/60 hover:shadow-[0_0_30px_-5px_rgba(34,211,238,0.3)]" itemscope itemtype="https://schema.org/SoftwareSourceCode">
+        <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
+          <h3 class="text-xl md:text-2xl font-bold font-mono text-cyan-300 group-hover:text-cyan-200 transition" itemprop="name">
+            <a href="https://github.com/meneliti/{name}" itemprop="url" target="_blank" rel="noopener" class="hover:underline">{name}</a>
+          </h3>
+          <span class="text-xs font-mono px-2.5 py-1 rounded-full border border-fuchsia-500/40 text-fuchsia-300 bg-fuchsia-500/10">{r.get('language') or 'Python'}</span>
+        </div>
+        <p class="text-sm text-gray-400 mb-4 font-mono">Diperbarui: <time itemprop="dateModified" datetime="{upd}">{fmt_date(upd)}</time></p>
+        <details open class="prose-detail">
+          <summary class="cursor-pointer text-sm text-cyan-400 hover:text-cyan-300 mb-3 select-none font-mono">▸ {words} kata — klik untuk buka/tutup</summary>
+          <div class="text-gray-300 leading-relaxed space-y-3 text-sm md:text-[15px]" itemprop="description">{paras_html}</div>
+        </details>
+        <div class="mt-5 flex flex-wrap gap-3">
+          <a href="https://github.com/meneliti/{name}" target="_blank" rel="noopener" class="text-sm font-mono px-4 py-2 rounded-lg border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 hover:border-cyan-400 transition">GitHub →</a>
+          <a href="https://github.com/meneliti/{name}#readme" target="_blank" rel="noopener" class="text-sm font-mono px-4 py-2 rounded-lg border border-gray-600 text-gray-300 hover:border-gray-400 transition">Dokumentasi</a>
+        </div>
+      </article>""")
+    return "\n".join(cards)
+
+
+def build_jsonld(repos):
+    return json.dumps({
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        "name": "Repositori meneliti",
+        "itemListElement": [
+            {"@type": "SoftwareSourceCode", "position": i + 1,
+             "name": r["name"], "url": f"https://github.com/meneliti/{r['name']}",
+             "programmingLanguage": r.get("language") or "Python",
+             "author": {"@type": "Person", "name": "meneliti",
+                        "url": "https://github.com/meneliti"}}
+            for i, r in enumerate(repos)
+        ],
+    }, ensure_ascii=False)
+
+
+def main():
+    repos = fetch_repos()
+    for r in repos:
+        r.setdefault("updated", r.get("updated_at", ""))
+    now = datetime.now(WIB)
+    updated = now.strftime(f"%d {BULAN[now.month]} %Y %H:%M WIB")
+    cards = build_cards(repos)
+    jsonld = build_jsonld(repos)
+    repo_names = [r["name"] for r in repos]
+
+    html = f"""<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>meneliti — Data Realtime Indonesia: Harga Emas, Sembako, Trending & Uptime Monitor</title>
+<meta name="description" content="Kumpulan repositori open-source data realtime Indonesia: harga emas batangan 18 penyedia, harga sembako 26 komoditas 38 provinsi, 25 tren Google Trends harian, dan uptime monitor berbasis git. Diperbarui otomatis.">
+<meta name="keywords" content="harga emas hari ini, harga sembako terbaru, trending indonesia, google trends, uptime monitor, open source, data indonesia, logam mulia, antam, pegadaian, github pages">
+<meta name="author" content="meneliti">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://meneliti.github.io/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="meneliti.github.io">
+<meta property="og:title" content="meneliti — Data Realtime Indonesia">
+<meta property="og:description" content="Harga emas, harga sembako, trending Google Trends, dan uptime monitor — semua open-source, diperbarui otomatis.">
+<meta property="og:url" content="https://meneliti.github.io/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="meneliti — Data Realtime Indonesia">
+<meta name="twitter:description" content="Harga emas, sembako, trending harian, uptime monitor. Open-source & otomatis.">
+<meta name="theme-color" content="#030712">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔬</text></svg>">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={{theme:{{extend:{{fontFamily:{{mono:['JetBrains Mono','ui-monospace','monospace']}}}}}}}}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
+<script type="application/ld+json">{jsonld}</script>
+<style>
+  body {{ background:#030712; }}
+  .grid-bg {{
+    background-image:
+      linear-gradient(rgba(34,211,238,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34,211,238,0.05) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }}
+  .glow-text {{ text-shadow: 0 0 18px rgba(34,211,238,.55); }}
+  .scanline::after {{
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:50;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.12) 0 1px, transparent 1px 3px);
+  }}
+  .flicker {{ animation: flicker 4s infinite; }}
+  @keyframes flicker {{ 0%,94%,98%,100%{{opacity:1}} 96%{{opacity:.75}} }}
+  .repo-card {{ scroll-margin-top: 90px; }}
+  details[open] summary .chev {{ transform: rotate(90deg); }}
+</style>
+</head>
+<body class="scanline font-mono text-gray-200 antialiased">
+
+<!-- NAV -->
+<nav class="sticky top-0 z-40 backdrop-blur bg-gray-950/80 border-b border-cyan-500/20">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+    <a href="#" class="font-bold text-cyan-400 glow-text flicker">🔬 meneliti<span class="text-fuchsia-400">.github.io</span></a>
+    <div class="hidden md:flex gap-6 text-sm">
+      {"".join(f'<a href="#{n.lower()}" class="text-gray-400 hover:text-cyan-300 transition">{n}</a>' for n in repo_names)}
+    </div>
+    <a href="https://github.com/meneliti" target="_blank" rel="noopener" class="text-sm px-3 py-1.5 rounded-lg border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 transition">GitHub</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="grid-bg border-b border-cyan-500/10">
+  <div class="max-w-6xl mx-auto px-4 py-16 md:py-24 text-center">
+    <p class="text-cyan-500/80 text-xs md:text-sm tracking-[0.35em] mb-4">[ OPEN SOURCE · REALTIME DATA · INDONESIA ]</p>
+    <h1 class="text-3xl md:text-6xl font-extrabold text-white glow-text mb-6">meneliti<span class="text-cyan-400">.github.io</span></h1>
+    <p class="max-w-2xl mx-auto text-gray-400 text-sm md:text-lg leading-relaxed">
+      Kumpulan repositori data <span class="text-cyan-300">realtime</span> Indonesia — harga emas batangan dari 18 penyedia resmi,
+      harga sembako 26 komoditas lintas 38 provinsi, 25 tren Google Trends harian,
+      dan uptime monitor berbasis git. Semua diperbarui otomatis oleh skrip Python tanpa henti.
+    </p>
+    <div class="mt-8 flex flex-wrap justify-center gap-4">
+      <a href="#daftar" class="px-6 py-3 rounded-xl bg-cyan-500/10 border border-cyan-400/50 text-cyan-300 hover:bg-cyan-500/20 transition font-semibold">Lihat Repositori ↓</a>
+      <a href="https://github.com/meneliti" target="_blank" rel="noopener" class="px-6 py-3 rounded-xl border border-gray-600 text-gray-300 hover:border-cyan-400/60 hover:text-cyan-300 transition">github.com/meneliti</a>
+    </div>
+    <p class="mt-6 text-[11px] text-gray-600">Halaman dibangun: {updated} · daftar repo ditarik live dari GitHub API saat kamu membuka halaman ini</p>
+  </div>
+</header>
+
+<!-- LIVE STATUS -->
+<section class="max-w-6xl mx-auto px-4 py-10">
+  <div id="live-status" class="text-xs md:text-sm font-mono text-gray-500 bg-gray-900/50 border border-gray-800 rounded-xl px-4 py-3">
+    <span class="text-cyan-400">⟳</span> Menghubungi GitHub API…
+  </div>
+</section>
+
+<!-- DAFTAR REPO -->
+<main id="daftar" class="max-w-6xl mx-auto px-4 pb-20">
+  <h2 class="text-2xl md:text-3xl font-bold text-white mb-2 glow-text">📁 Daftar Repositori</h2>
+  <p class="text-gray-500 text-sm mb-8">Keterangan mendalam ±500 kata per repo. Data kartu (nama, bahasa, update terakhir) ditarik realtime dari GitHub API — di bawah adalah snapshot saat build.</p>
+  <div class="grid gap-6 md:gap-8">
+{cards}
+  </div>
+</main>
+
+<!-- FOOTER -->
+<footer class="border-t border-cyan-500/10 py-10 text-center">
+  <p class="text-gray-500 text-sm">© {now.year} <a href="https://github.com/meneliti" class="text-cyan-400 hover:underline">meneliti</a> · PT. Pastiin Siber Indonesia</p>
+  <p class="text-gray-600 text-xs mt-2">Powered by GitHub Pages · dibangun dengan Tailwind CSS & Python</p>
+  <p class="text-gray-600 text-xs mt-2"><img src="https://s01.flagcounter.com/countxl/qaoY/bg_FFFFFF/txt_000000/border_CCCCCC/columns_2/maxflags_10/viewers_0/labels_0/pageviews_1/flags_0/percent_0/" alt="pengunjung" class="inline-block rounded"></p>
+</footer>
+
+<script>
+// Realtime repo list — tarik dari GitHub API, perbarui status bar & badge update
+(async () => {{
+  const el = document.getElementById('live-status');
+  try {{
+    const res = await fetch('https://api.github.com/users/meneliti/repos?per_page=100&sort=updated');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const repos = await res.json();
+    const list = repos.filter(r => r.name !== 'meneliti.github.io');
+    el.innerHTML = '<span class="text-green-400">● LIVE</span> ' + list.length +
+      ' repositori aktif · terakhir push: ' +
+      new Date(list[0].updated_at).toLocaleString('id-ID', {{dateStyle:'long', timeStyle:'short'}}) +
+      ' · sumber: api.github.com';
+    // perbarui badge tanggal tiap kartu berdasarkan data live
+    list.forEach(r => {{
+      const card = document.getElementById(r.name.toLowerCase());
+      if (!card) return;
+      const t = card.querySelector('time');
+      if (t) {{
+        t.setAttribute('datetime', r.updated_at);
+        t.textContent = new Date(r.updated_at).toLocaleDateString('id-ID', {{day:'numeric', month:'long', year:'numeric'}});
+      }}
+    }});
+  }} catch (e) {{
+    el.innerHTML = '<span class="text-yellow-500">○ OFFLINE</span> GitHub API tidak terjangkau — menampilkan snapshot build. (' + e.message + ')';
+  }}
+}})();
+</script>
+</body>
+</html>"""
+    with open("index.html", "w") as f:
+        f.write(html)
+    print(f"index.html dibuat ({len(html)} bytes, {len(repos)} repo)")
+
+
+if __name__ == "__main__":
+    main()
